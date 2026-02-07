@@ -8,7 +8,7 @@ import json
 import plotly.express as px
 
 # 1. Page Config
-st.set_page_config(page_title="Yen Tracker Pro", page_icon="¥", layout="centered")
+st.set_page_config(page_title="Yen Tracker Pro", page_icon="¥", layout="wide") # Set to wide for side-by-side charts
 
 # 2. Connections
 scope = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -17,7 +17,7 @@ creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
 # 3. Open Sheets
-SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" # <--- PASTE YOUR ID HERE
+SHEET_ID = "YOUR_LONG_ID_HERE" # <--- PASTE YOUR ID HERE
 sh = client.open_by_key(SHEET_ID)
 expense_ws = sh.get_worksheet(0)
 settings_ws = sh.worksheet("Settings")
@@ -27,14 +27,14 @@ suggested_item = ""
 suggested_amount = 0
 suggested_cat = "Food 🍱"
 
-# 5. Get Budget (Salary) from Sheet
+# 5. Get Salary from Sheet
 try:
     budget_val = settings_ws.acell('B1').value
     monthly_budget = int(budget_val.replace(',', '')) if budget_val else 300000
 except:
     monthly_budget = 300000
 
-st.title("Bond Finances")
+st.title("¥ Yen Tracker Pro")
 
 # --- AI SCANNER SECTION ---
 with st.expander("📸 Scan Receipt with AI"):
@@ -61,16 +61,17 @@ with st.expander("📸 Scan Receipt with AI"):
 # --- ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
     st.subheader("Add New Expense")
-    item = st.text_input("Item Name", value=suggested_item)
-    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1)
-    
-    categories = ["Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
-                  "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
-                  "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"]
-    
-    idx = categories.index(suggested_cat) if suggested_cat in categories else 0
-    category = st.selectbox("Category", categories, index=idx, key="form_cat")
-    date = st.date_input("Date")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        item = st.text_input("Item Name", value=suggested_item)
+        amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1)
+    with col_b:
+        categories = ["Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
+                      "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
+                      "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"]
+        idx = categories.index(suggested_cat) if suggested_cat in categories else 0
+        category = st.selectbox("Category", categories, index=idx, key="form_cat")
+        date = st.date_input("Date")
     
     submit = st.form_submit_button("Save to Google Sheets")
     
@@ -90,42 +91,49 @@ if data:
     df = df.dropna(subset=['Date', 'Amount'])
 
     if not df.empty:
-        # CURRENT MONTH STATS
+        # 1. Metrics Logic
         current_month = pd.Timestamp.now().to_period('M')
         df['MonthYear'] = df['Date'].dt.to_period('M')
-        monthly_total = df[df['MonthYear'] == current_month]['Amount'].sum()
+        curr_month_df = df[df['MonthYear'] == current_month]
+        monthly_total = curr_month_df['Amount'].sum()
         remaining = monthly_budget - monthly_total
         percent_spent = min(max(monthly_total / monthly_budget, 0.0), 1.0)
 
         st.divider()
-        col1, col2 = st.columns(2)
-        col1.metric("Spent This Month", f"¥{int(monthly_total):,}")
-        col2.metric("Remaining Salary", f"¥{int(remaining):,}", 
-                  delta=f"{(remaining/monthly_budget)*100:.1f}% safe",
+        m1, m2 = st.columns(2)
+        m1.metric("Spent This Month", f"¥{int(monthly_total):,}")
+        m2.metric("Remaining Salary", f"¥{int(remaining):,}", 
+                  delta=f"{(remaining/monthly_budget)*100:.1f}% left",
                   delta_color="normal" if remaining > 0 else "inverse")
-        
         st.progress(percent_spent)
 
-        # --- NEW: MONTHLY TREND CHART ---
-        st.subheader("Monthly Spending Trend")
-        
-        # Group data by month
-        trend_df = df.groupby('MonthYear')['Amount'].sum().reset_index()
-        trend_df['MonthYear'] = trend_df['MonthYear'].astype(str)
-        
-        fig = px.bar(trend_df, x='MonthYear', y='Amount', 
-                     title="Total Spending by Month",
-                     labels={'Amount': 'Total Spent (¥)', 'MonthYear': 'Month'},
-                     color_discrete_sequence=['#ff4b4b'])
-        
-        # Add a horizontal line for the Budget/Salary
-        fig.add_hline(y=monthly_budget, line_dash="dot", 
-                      annotation_text="Monthly Salary", 
-                      line_color="green")
-        
-        st.plotly_chart(fig, use_container_width=True)
+        # 2. CHARTS SECTION (SIDE-BY-SIDE)
+        st.write("### Financial Visuals")
+        chart_col1, chart_col2 = st.columns(2)
 
-        # History Table
+        with chart_col1:
+            # Monthly Trend Bar Chart
+            trend_df = df.groupby('MonthYear')['Amount'].sum().reset_index()
+            trend_df['MonthYear'] = trend_df['MonthYear'].astype(str)
+            fig_bar = px.bar(trend_df, x='MonthYear', y='Amount', 
+                             title="Spending History (Month-over-Month)",
+                             labels={'Amount': 'Spent (¥)', 'MonthYear': 'Month'},
+                             color_discrete_sequence=['#ff4b4b'])
+            fig_bar.add_hline(y=monthly_budget, line_dash="dot", line_color="green", annotation_text="Salary")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+        with chart_col2:
+            # Category Pie Chart (Current Month Only)
+            if not curr_month_df.empty:
+                cat_df = curr_month_df.groupby('Category')['Amount'].sum().reset_index()
+                fig_pie = px.pie(cat_df, values='Amount', names='Category', 
+                                 title=f"Category Breakdown ({current_month})",
+                                 hole=0.4) # Makes it a Donut chart
+                st.plotly_chart(fig_pie, use_container_width=True)
+            else:
+                st.info("Log an expense this month to see the category breakdown!")
+
+        # 3. History Table
         with st.expander("View Recent History"):
             st.dataframe(df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(10), hide_index=True)
 
@@ -137,6 +145,7 @@ with st.sidebar:
         settings_ws.update_acell('B1', new_budget)
         st.success("Salary updated!")
         st.rerun()
+
 
 
 
