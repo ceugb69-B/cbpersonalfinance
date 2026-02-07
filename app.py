@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 import google.generativeai as genai
 from PIL import Image
 import json
+import plotly.express as px
 
 # 1. Page Config
 st.set_page_config(page_title="Yen Tracker Pro", page_icon="¥", layout="centered")
@@ -26,7 +27,7 @@ suggested_item = ""
 suggested_amount = 0
 suggested_cat = "Food 🍱"
 
-# 5. Get Budget from Sheet
+# 5. Get Budget (Salary) from Sheet
 try:
     budget_val = settings_ws.acell('B1').value
     monthly_budget = int(budget_val.replace(',', '')) if budget_val else 300000
@@ -83,14 +84,13 @@ with st.form("expense_form", clear_on_submit=True):
 data = expense_ws.get_all_records()
 if data:
     df = pd.DataFrame(data)
-    # Clean data
     df.columns = df.columns.str.strip()
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
     df = df.dropna(subset=['Date', 'Amount'])
 
     if not df.empty:
-        # Calculate Monthly Stats
+        # CURRENT MONTH STATS
         current_month = pd.Timestamp.now().to_period('M')
         df['MonthYear'] = df['Date'].dt.to_period('M')
         monthly_total = df[df['MonthYear'] == current_month]['Amount'].sum()
@@ -98,29 +98,46 @@ if data:
         percent_spent = min(max(monthly_total / monthly_budget, 0.0), 1.0)
 
         st.divider()
-        # Metrics
         col1, col2 = st.columns(2)
         col1.metric("Spent This Month", f"¥{int(monthly_total):,}")
-        col2.metric("Remaining", f"¥{int(remaining):,}", 
-                  delta=f"{(remaining/monthly_budget)*100:.1f}% budget left",
+        col2.metric("Remaining Salary", f"¥{int(remaining):,}", 
+                  delta=f"{(remaining/monthly_budget)*100:.1f}% safe",
                   delta_color="normal" if remaining > 0 else "inverse")
         
-        # Progress Bar
-        st.write(f"**Budget Usage: {int(percent_spent*100)}%**")
         st.progress(percent_spent)
 
+        # --- NEW: MONTHLY TREND CHART ---
+        st.subheader("Monthly Spending Trend")
+        
+        # Group data by month
+        trend_df = df.groupby('MonthYear')['Amount'].sum().reset_index()
+        trend_df['MonthYear'] = trend_df['MonthYear'].astype(str)
+        
+        fig = px.bar(trend_df, x='MonthYear', y='Amount', 
+                     title="Total Spending by Month",
+                     labels={'Amount': 'Total Spent (¥)', 'MonthYear': 'Month'},
+                     color_discrete_sequence=['#ff4b4b'])
+        
+        # Add a horizontal line for the Budget/Salary
+        fig.add_hline(y=monthly_budget, line_dash="dot", 
+                      annotation_text="Monthly Salary", 
+                      line_color="green")
+        
+        st.plotly_chart(fig, use_container_width=True)
+
         # History Table
-        st.subheader("Recent History")
-        st.dataframe(df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(10), hide_index=True)
+        with st.expander("View Recent History"):
+            st.dataframe(df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(10), hide_index=True)
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("Settings")
-    new_budget = st.number_input("Monthly Budget", value=monthly_budget, step=10000)
-    if st.button("Update Budget"):
+    new_budget = st.number_input("Update Monthly Salary", value=monthly_budget, step=10000)
+    if st.button("Save Salary"):
         settings_ws.update_acell('B1', new_budget)
-        st.success("Budget updated!")
+        st.success("Salary updated!")
         st.rerun()
+
 
 
 
