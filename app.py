@@ -2,6 +2,8 @@ import streamlit as st
 import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
+import google.generativeai as genai
+from PIL import Image
 
 # 1. Page Config for iPhone
 st.set_page_config(page_title="Bond's Finance Tracker", page_icon="¥", layout="centered")
@@ -34,13 +36,52 @@ with st.sidebar:
         st.success("Budget Saved!")
         st.rerun()
 
-st.title("¥ Yen Tracker Pro")
+st.title("Bond Finances")
+# --- AI RECEIPT SCANNER ---
+st.subheader("📸 Quick Scan")
+uploaded_file = st.camera_input("Take a photo of your receipt")
 
+if uploaded_file:
+    # Configure Gemini
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    
+    img = Image.open(uploaded_file)
+    
+    with st.spinner("AI is reading the receipt..."):
+        # The "Prompt" tells the AI exactly what we want
+        prompt = """
+        Analyze this receipt. Return ONLY a JSON object with:
+        {"item": "store name", "amount": total_amount_as_integer, "category": "one of the categories below"}
+        Categories: Food, Transport, Shopping, Sightseeing, Mortgage, Car, Water, Electricity, Insurance, Pet stuff, Gifts
+        """
+        response = model.generate_content([prompt, img])
+        
+        # Try to parse the AI's answer
+        try:
+            import json
+            # Cleaning the response text to ensure it's pure JSON
+            raw_text = response.text.replace('```json', '').replace('```', '').strip()
+            ai_data = json.loads(raw_text)
+            
+            # Pre-fill the variables for the form below!
+            st.success(f"AI suggests: {ai_data['item']} for ¥{ai_data['amount']}")
+            
+            # These will now be used as 'value' in your text_input and number_input
+            suggested_item = ai_data['item']
+            suggested_amount = ai_data['amount']
+        except:
+            st.error("AI couldn't read the receipt clearly. Please enter manually.")
+            suggested_item = ""
+            suggested_amount = 0
+else:
+    suggested_item = ""
+    suggested_amount = 0
 # --- ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
     st.subheader("Add New Expense")
-    item = st.text_input("Item Name")
-    amount = st.number_input("Amount (¥)", min_value=0, step=1, format="%d")
+    item = st.text_input("Item Name", value=suggested_item)
+    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1, format="%d")
     category = st.selectbox("Category", [
         "Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
         "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
@@ -104,6 +145,7 @@ if data:
         )
 else:
     st.info("No data found. Start by adding an expense above!")
+
 
 
 
