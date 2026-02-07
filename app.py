@@ -6,7 +6,7 @@ st.title("¥ Yen Tracker Pro")
 # 1. Your Google Sheet URL
 # Make sure the URL ends in /export?format=csv
 sheet_id = "YOUR_SHEET_ID_HEREhttps://docs.google.com/spreadsheets/d/1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU/edit?usp=sharing" 
-url = f"https://docs.google.com/spreadsheets/d/1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU/edit?pli=1&gid=0#gid=0export?format=csv"
+url = f"https://docs.google.com/spreadsheets/d/1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU/export?format=csv"
 
 # 2. Read the data
 try:
@@ -21,4 +21,5 @@ try:
 
 except Exception as e:
     st.error("The app can't see the sheet. Did you set 'Anyone with the link' to Viewer?")
+
 
