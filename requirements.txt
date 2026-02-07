@@ -1,4 +1,2 @@
-\f0\fs24 \cf0 streamlit\
-st-gsheets-connection\
-pandas\
-matplotlib}
+streamlit
+pandas
