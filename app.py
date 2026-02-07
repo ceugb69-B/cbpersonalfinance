@@ -4,147 +4,129 @@ import pandas as pd
 from google.oauth2.service_account import Credentials
 import google.generativeai as genai
 from PIL import Image
+import json
 
-# 1. Page Config for iPhone
-st.set_page_config(page_title="Bond's Finance Tracker", page_icon="¥", layout="centered")
+# 1. Page Config
+st.set_page_config(page_title="Yen Tracker Pro", page_icon="¥", layout="centered")
 
-# 2. Setup Connection
+# 2. Connections
 scope = ["https://www.googleapis.com/auth/spreadsheets"]
 creds_dict = st.secrets["connections"]["gsheets"]
 creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
-# 3. Open the Sheet (Make sure your ID is correct below)
-SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" 
+# 3. Open Sheets
+SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" # <--- RE-PASTE YOUR SHEET ID HERE
 sh = client.open_by_key(SHEET_ID)
-expense_ws = sh.get_worksheet(0) # Targets the first tab (Sheet1)
-settings_ws = sh.worksheet("Settings") # Targets the Settings tab
+expense_ws = sh.get_worksheet(0)
+settings_ws = sh.worksheet("Settings")
 
-# 4. Get Budget from Settings Tab (Cell B1)
+# 4. Get Budget
 try:
     budget_val = settings_ws.acell('B1').value
     monthly_budget = int(budget_val.replace(',', '')) if budget_val else 300000
 except:
     monthly_budget = 300000
 
-# --- SIDEBAR SETTINGS ---
-with st.sidebar:
-    st.header("Budget Settings")
-    new_budget = st.number_input("Monthly Limit (¥)", value=monthly_budget, step=10000)
-    if st.button("Save New Budget"):
-        settings_ws.update_acell('B1', new_budget)
-        st.success("Budget Saved!")
-        st.rerun()
-
+# --- AI SCANNER LOGIC ---
 st.title("Bond Finances")
-# --- AI RECEIPT SCANNER ---
-st.subheader("📸 Quick Scan")
-uploaded_file = st.camera_input("Take a photo of your receipt")
 
-if uploaded_file:
-    # Configure Gemini
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    
-    img = Image.open(uploaded_file)
-    
-    with st.spinner("AI is reading the receipt..."):
-        # The "Prompt" tells the AI exactly what we want
-        prompt = """
-        Analyze this receipt. Return ONLY a JSON object with:
-        {"item": "store name", "amount": total_amount_as_integer, "category": "one of the categories below"}
-        Categories: Food, Transport, Shopping, Sightseeing, Mortgage, Car, Water, Electricity, Insurance, Pet stuff, Gifts
-        """
-        response = model.generate_content([prompt, img])
+suggested_item = ""
+suggested_amount = 0
+suggested_cat = "Food 🍱"
+
+# This expander keeps the camera hidden until you need it
+with st.expander("📸 Scan Receipt with AI"):
+    uploaded_file = st.camera_input("Take a photo of receipt")
+    if uploaded_file:
+        # Configure Gemini with your secret key
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        img = Image.open(uploaded_file)
         
-        # Try to parse the AI's answer
-        try:
-            import json
-            # Cleaning the response text to ensure it's pure JSON
-            raw_text = response.text.replace('```json', '').replace('```', '').strip()
-            ai_data = json.loads(raw_text)
-            
-            # Pre-fill the variables for the form below!
-            st.success(f"AI suggests: {ai_data['item']} for ¥{ai_data['amount']}")
-            
-            # These will now be used as 'value' in your text_input and number_input
-            suggested_item = ai_data['item']
-            suggested_amount = ai_data['amount']
-        except:
-            st.error("AI couldn't read the receipt clearly. Please enter manually.")
-            suggested_item = ""
-            suggested_amount = 0
-else:
-    suggested_item = ""
-    suggested_amount = 0
+        with st.spinner("AI is reading the receipt..."):
+            prompt = """
+            Analyze this Japanese receipt. Return ONLY a JSON object:
+            {"item": "store or item name", "amount": total_as_int, "category": "match one below"}
+            Categories: Food 🍱, Transport 🚆, Shopping 🛍️, Sightseeing 🏯, Mortgage 🏠, Car 🚗, Water 💧, Electricity ⚡, Car Insurance 🛡️, Motorcycle Insurance 🏍️, Pet stuff 🐾, Gifts 🎁
+            Look for '合計' or '税込' for the total.
+            """
+            response = model.generate_content([prompt, img])
+            try:
+                # Cleaning the text to find the JSON block
+                raw_text = response.text.strip().replace('```json', '').replace('```', '')
+                ai_data = json.loads(raw_text)
+                
+                suggested_item = ai_data.get('item', "")
+                suggested_amount = ai_data.get('amount', 0)
+                suggested_cat = ai_data.get('category', "Food 🍱")
+                st.success(f"AI Detected: {suggested_item} (¥{suggested_amount})")
+            except:
+                st.error("AI couldn't parse the receipt. Please try again or enter manually.")
+
 # --- ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
     st.subheader("Add New Expense")
+    
+    # These fields are pre-filled if the AI worked!
     item = st.text_input("Item Name", value=suggested_item)
-    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1, format="%d")
-    category = st.selectbox("Category", [
-        "Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
-        "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
-        "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"
-    ])
+    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1)
+    
+    categories = ["Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
+                  "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
+                  "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"]
+    
+    # Match the category from the AI
+    try:
+        default_index = categories.index(suggested_cat)
+    except:
+        default_index = 0
+        
+    category = st.selectbox("Category", categories, index=default_index)
     date = st.date_input("Date")
     
     submit = st.form_submit_button("Save to Google Sheets")
     
     if submit:
         if item and amount > 0:
-            # Append row to Sheet1: Date, Item, Category, Amount
             expense_ws.append_row([str(date), item, category, amount])
-            st.success(f"Saved: {item} for ¥{amount:,}")
+            st.success(f"Saved: {item}")
             st.rerun()
-        else:
-            st.error("Please enter both an item and an amount.")
 
 # --- DATA PROCESSING & DASHBOARD ---
 data = expense_ws.get_all_records()
-
 if data:
     df = pd.DataFrame(data)
-    # Clean up any messy data
     df.columns = df.columns.str.strip()
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
     df = df.dropna(subset=['Date', 'Amount'])
 
     if not df.empty:
-        # Calculate Current Month Spending
         current_month = pd.Timestamp.now().to_period('M')
         df['MonthYear'] = df['Date'].dt.to_period('M')
-        
         monthly_total = df[df['MonthYear'] == current_month]['Amount'].sum()
-        remaining = new_budget - monthly_total
+        remaining = monthly_budget - monthly_total
 
-        # --- DISPLAY METRICS ---
         st.divider()
         m1, m2 = st.columns(2)
-        m1.metric("Spent (This Month)", f"¥{int(monthly_total):,}")
+        m1.metric("Spent This Month", f"¥{int(monthly_total):,}")
+        m2.metric("Remaining", f"¥{int(remaining):,}", 
+                  delta=f"{(remaining/monthly_budget)*100:.1f}% left",
+                  delta_color="normal" if remaining > 0 else "inverse")
         
-        # Calculate Delta and Color
-        remaining_pct = (remaining / new_budget) * 100 if new_budget > 0 else 0
-        m2.metric(
-            "Remaining", 
-            f"¥{int(remaining):,}", 
-            delta=f"{remaining_pct:.1f}% left",
-            delta_color="normal" if remaining > 0 else "inverse"
-        )
-        
-        # Progress Bar visual
-        st.progress(min(max(monthly_total / new_budget, 0.0), 1.0) if new_budget > 0 else 0.0)
+        st.progress(min(max(monthly_total / monthly_budget, 0.0), 1.0))
+        st.dataframe(df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(10), hide_index=True)
 
-        # Show History
-        st.subheader("Recent Expenses")
-        st.dataframe(
-            df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(15), 
-            use_container_width=True,
-            hide_index=True
-        )
-else:
-    st.info("No data found. Start by adding an expense above!")
+# --- SIDEBAR FOR SETTINGS ---
+with st.sidebar:
+    st.header("Settings")
+    new_budget = st.number_input("Edit Monthly Budget", value=monthly_budget, step=10000)
+    if st.button("Update Budget"):
+        settings_ws.update_acell('B1', new_budget)
+        st.success("Budget updated in Sheet!")
+        st.rerun()
+
 
 
 
