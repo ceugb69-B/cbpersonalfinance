@@ -52,12 +52,43 @@ if submit:
         else:
             st.error("Please enter an item name.")
 
-# --- VIEW DATA ---
+# --- CALCULATIONS ---
+df['Date'] = pd.to_datetime(df['Date'])
+df['Month'] = df['Date'].dt.to_period('M')
+
+# Get current month and last month
+current_month = pd.Timestamp.now().to_period('M')
+last_month = (pd.Timestamp.now() - pd.offsets.MonthBegin(1)).to_period('M')
+
+# Calculate totals
+monthly_total = df[df['Month'] == current_month]['Amount'].sum()
+last_month_total = df[df['Month'] == last_month]['Amount'].sum()
+
+# SET YOUR BUDGET HERE (e.g., 300,000 Yen)
+MONTHLY_BUDGET = 300000 
+remaining = MONTHLY_BUDGET - monthly_total
+
+# --- DASHBOARD METRICS ---
 st.divider()
-st.subheader("Recent Expenses")
-data = worksheet.get_all_records()
-df = pd.DataFrame(data)
-st.dataframe(df)
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric("Spent This Month", f"¥{monthly_total:,}")
+
+with col2:
+    # This shows the "Month on Month" difference
+    delta = monthly_total - last_month_total
+    st.metric("vs. Last Month", f"¥{delta:,}", delta_color="inverse")
+
+with col3:
+    st.metric("Budget Remaining", f"¥{remaining:,}", delta=f"Budget: ¥{MONTHLY_BUDGET:,}")
+
+# --- MONTHLY BREAKDOWN TABLE ---
+st.subheader("Monthly Summary")
+monthly_summary = df.groupby('Month')['Amount'].sum().reset_index()
+monthly_summary['Month'] = monthly_summary['Month'].astype(str)
+st.bar_chart(monthly_summary.set_index('Month'))
+
 
 
 
