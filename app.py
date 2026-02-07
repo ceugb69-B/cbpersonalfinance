@@ -97,7 +97,7 @@ with st.form("expense_form", clear_on_submit=True):
 category = st.selectbox("Category", categories, index=default_index, key="form_category")
 date = st.date_input("Date")
     
-    submit = st.form_submit_button("Save to Google Sheets")
+submit = st.form_submit_button("Save to Google Sheets")
     
     if submit:
         if item and amount > 0:
@@ -138,6 +138,7 @@ with st.sidebar:
         settings_ws.update_acell('B1', new_budget)
         st.success("Budget updated in Sheet!")
         st.rerun()
+
 
 
 
