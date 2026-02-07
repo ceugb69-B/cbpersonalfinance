@@ -28,41 +28,16 @@ try:
 except:
     monthly_budget = 300000
 
-# --- AI SCANNER LOGIC ---
+# --- SIDEBAR SETTINGS ---
+with st.sidebar:
+    st.header("Budget Settings")
+    new_budget = st.number_input("Monthly Limit (¥)", value=monthly_budget, step=10000)
+    if st.button("Save New Budget"):
+        settings_ws.update_acell('B1', new_budget)
+        st.success("Budget Saved!")
+        st.rerun()
+
 st.title("Bond Finances")
-
-suggested_item = ""
-suggested_amount = 0
-suggested_cat = "Food 🍱"
-
-# This expander keeps the camera hidden until you need it
-with st.expander("📸 Scan Receipt with AI"):
-    uploaded_file = st.camera_input("Take a photo of receipt")
-    if uploaded_file:
-        # Configure Gemini with your secret key
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        img = Image.open(uploaded_file)
-        
-        with st.spinner("AI is reading the receipt..."):
-            prompt = """
-            Analyze this Japanese receipt. Return ONLY a JSON object:
-            {"item": "store or item name", "amount": total_as_int, "category": "match one below"}
-            Categories: Food 🍱, Transport 🚆, Shopping 🛍️, Sightseeing 🏯, Mortgage 🏠, Car 🚗, Water 💧, Electricity ⚡, Car Insurance 🛡️, Motorcycle Insurance 🏍️, Pet stuff 🐾, Gifts 🎁
-            Look for '合計' or '税込' for the total.
-            """
-            response = model.generate_content([prompt, img])
-            try:
-                # Cleaning the text to find the JSON block
-                raw_text = response.text.strip().replace('```json', '').replace('```', '')
-                ai_data = json.loads(raw_text)
-                
-                suggested_item = ai_data.get('item', "")
-                suggested_amount = ai_data.get('amount', 0)
-                suggested_cat = ai_data.get('category', "Food 🍱")
-                st.success(f"AI Detected: {suggested_item} (¥{suggested_amount})")
-            except:
-                st.error("AI couldn't parse the receipt. Please try again or enter manually.")
 
 # --- ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
@@ -126,6 +101,10 @@ with st.sidebar:
         settings_ws.update_acell('B1', new_budget)
         st.success("Budget updated in Sheet!")
         st.rerun()
+
+
+
+
 
 
 
