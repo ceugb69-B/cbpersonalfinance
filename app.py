@@ -63,22 +63,37 @@ if submit:
     else:
             st.error("Please enter an item name.")
 
-# --- DATA PROCESSING (The Replacement) ---
-data = worksheet.get_all_records()
+# --- 1. ACCESS THE SETTINGS TAB ---
+# Connect to the 'Settings' worksheet
+settings_ws = sh.worksheet("Settings")
+
+# Get the current budget from cell B1
+current_budget_from_sheet = int(settings_ws.acell('B1').value or 300000)
+
+with st.sidebar:
+    st.header("Budget Settings")
+    new_budget = st.number_input("Monthly Budget (¥)", value=current_budget_from_sheet, step=10000)
+    
+    if st.button("Update Budget in Sheet"):
+        settings_ws.update_acell('B1', new_budget)
+        st.success("Budget Updated!")
+        st.rerun() # Refresh to use the new number
+
+monthly_budget = new_budget
+
+# --- 2. DATA PROCESSING (Expenses Tab) ---
+# Ensure we are looking at the first tab for expenses
+expense_ws = sh.get_worksheet(0) 
+data = expense_ws.get_all_records()
 
 if data:
     df = pd.DataFrame(data)
-    
-    # Clean headers and convert types safely
     df.columns = df.columns.str.strip()
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
-    
-    # Remove "ghost" rows (blanks)
     df = df.dropna(subset=['Date', 'Amount'])
 
     if not df.empty:
-        # Now we do the math
         current_month = pd.Timestamp.now().to_period('M')
         df['MonthYear'] = df['Date'].dt.to_period('M')
         
@@ -89,22 +104,13 @@ if data:
         st.divider()
         m1, m2 = st.columns(2)
         m1.metric("Spent (This Month)", f"¥{int(monthly_total):,}")
-        m2.metric("Budget Remaining", f"¥{int(remaining):,}")
+        m2.metric("Remaining", f"¥{int(remaining):,}", 
+                  delta=f"{(remaining/monthly_budget)*100:.1f}% left",
+                  delta_color="normal" if remaining > 0 else "inverse")
+        
+        # Progress Bar
+        st.progress(min(max(monthly_total / monthly_budget, 0.0), 1.0))
 
-        # Show the table
-        st.subheader("Recent History")
-        st.dataframe(df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1], use_container_width=True)
-    else:
-        st.warning("Found the sheet, but the rows appear to be empty or formatted incorrectly.")
-else:
-    st.info("Your Google Sheet is totally empty. Add your first expense to get started!")
-# Calculate percentage spent
-if monthly_budget > 0:
-    percent_spent = min(monthly_total / monthly_budget, 1.0)
-    st.progress(percent_spent)
-    
-    if percent_spent >= 0.9:
-        st.warning("⚠️ You've spent over 90% of your budget!")
 
 
 
