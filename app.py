@@ -16,27 +16,26 @@ creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
 # 3. Open Sheets
-SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" # <--- RE-PASTE YOUR SHEET ID HERE
+SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" # <--- PASTE YOUR ID HERE
 sh = client.open_by_key(SHEET_ID)
 expense_ws = sh.get_worksheet(0)
 settings_ws = sh.worksheet("Settings")
 
-# 4. Get Budget
+# 4. Initialize AI Variables
+suggested_item = ""
+suggested_amount = 0
+suggested_cat = "Food 🍱"
+
+# 5. Get Budget from Sheet
 try:
     budget_val = settings_ws.acell('B1').value
     monthly_budget = int(budget_val.replace(',', '')) if budget_val else 300000
 except:
     monthly_budget = 300000
-# ... setup code ...
-
-## --- INITIALIZE VARIABLES ---
-suggested_item = ""
-suggested_amount = 0
-suggested_cat = "Food 🍱"
 
 st.title("Bond Finances")
 
-# --- AI SCANNER ---
+# --- AI SCANNER SECTION ---
 with st.expander("📸 Scan Receipt with AI"):
     uploaded_file = st.camera_input("Take a photo")
     if uploaded_file:
@@ -45,7 +44,8 @@ with st.expander("📸 Scan Receipt with AI"):
         img = Image.open(uploaded_file)
         
         with st.spinner("AI reading receipt..."):
-            prompt = "Analyze this receipt. Return ONLY JSON: {'item': 'name', 'amount': int, 'category': 'match'}"
+            prompt = """Analyze receipt. Return ONLY JSON: {"item": "store", "amount": int, "category": "match"}
+            Categories: Food 🍱, Transport 🚆, Shopping 🛍️, Sightseeing 🏯, Mortgage 🏠, Car 🚗, Water 💧, Electricity ⚡, Car Insurance 🛡️, Motorcycle Insurance 🏍️, Pet stuff 🐾, Gifts 🎁"""
             response = model.generate_content([prompt, img])
             try:
                 raw_text = response.text.strip().replace('```json', '').replace('```', '')
@@ -53,30 +53,75 @@ with st.expander("📸 Scan Receipt with AI"):
                 suggested_item = ai_data.get('item', "")
                 suggested_amount = ai_data.get('amount', 0)
                 suggested_cat = ai_data.get('category', "Food 🍱")
+                st.success(f"AI Detected: {suggested_item}")
             except:
-                st.error("AI parse error.")
+                st.error("AI couldn't parse. Try manual entry.")
 
-# --- ADD EXPENSE FORM (Aligned to the left wall!) ---
+# --- ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
     st.subheader("Add New Expense")
     item = st.text_input("Item Name", value=suggested_item)
-    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount))
+    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1)
     
     categories = ["Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
                   "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
                   "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"]
     
-    # Use the 'key' to avoid the duplicate ID error we saw earlier
     idx = categories.index(suggested_cat) if suggested_cat in categories else 0
-    category = st.selectbox("Category", categories, index=idx, key="main_cat_select")
+    category = st.selectbox("Category", categories, index=idx, key="form_cat")
+    date = st.date_input("Date")
     
     submit = st.form_submit_button("Save to Google Sheets")
     
     if submit:
         if item and amount > 0:
-            expense_ws.append_row([str(st.date_input("Date")), item, category, amount])
-            st.success("Saved!")
+            expense_ws.append_row([str(date), item, category, amount])
+            st.success(f"Saved: {item}")
             st.rerun()
+
+# --- DATA PROCESSING & DASHBOARD ---
+data = expense_ws.get_all_records()
+if data:
+    df = pd.DataFrame(data)
+    # Clean data
+    df.columns = df.columns.str.strip()
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+    df = df.dropna(subset=['Date', 'Amount'])
+
+    if not df.empty:
+        # Calculate Monthly Stats
+        current_month = pd.Timestamp.now().to_period('M')
+        df['MonthYear'] = df['Date'].dt.to_period('M')
+        monthly_total = df[df['MonthYear'] == current_month]['Amount'].sum()
+        remaining = monthly_budget - monthly_total
+        percent_spent = min(max(monthly_total / monthly_budget, 0.0), 1.0)
+
+        st.divider()
+        # Metrics
+        col1, col2 = st.columns(2)
+        col1.metric("Spent This Month", f"¥{int(monthly_total):,}")
+        col2.metric("Remaining", f"¥{int(remaining):,}", 
+                  delta=f"{(remaining/monthly_budget)*100:.1f}% budget left",
+                  delta_color="normal" if remaining > 0 else "inverse")
+        
+        # Progress Bar
+        st.write(f"**Budget Usage: {int(percent_spent*100)}%**")
+        st.progress(percent_spent)
+
+        # History Table
+        st.subheader("Recent History")
+        st.dataframe(df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(10), hide_index=True)
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("Settings")
+    new_budget = st.number_input("Monthly Budget", value=monthly_budget, step=10000)
+    if st.button("Update Budget"):
+        settings_ws.update_acell('B1', new_budget)
+        st.success("Budget updated!")
+        st.rerun()
+
 
 
 
