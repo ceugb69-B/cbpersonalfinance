@@ -2,114 +2,109 @@ import streamlit as st
 import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
-st.set_page_config(
-    page_title="Yen Tracker",
-    page_icon="¥",
-    layout="centered", # Better for narrow phone screens
-    initial_sidebar_state="collapsed"
-)
 
-# 1. Setup Connection
+# 1. Page Config for iPhone
+st.set_page_config(page_title="Yen Tracker Pro", page_icon="¥", layout="centered")
+
+# 2. Setup Connection
 scope = ["https://www.googleapis.com/auth/spreadsheets"]
 creds_dict = st.secrets["connections"]["gsheets"]
 creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
-# 2. Open the Sheet (Use your Sheet ID here)
-SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU"
+# 3. Open the Sheet (Make sure your ID is correct below)
+SHEET_ID = "YOUR_LONG_ID_HERE" 
 sh = client.open_by_key(SHEET_ID)
-worksheet = sh.get_worksheet(0)
+expense_ws = sh.get_worksheet(0) # Targets the first tab (Sheet1)
+settings_ws = sh.worksheet("Settings") # Targets the Settings tab
 
-st.title("Bond Finance Tracker")
+# 4. Get Budget from Settings Tab (Cell B1)
+try:
+    budget_val = settings_ws.acell('B1').value
+    monthly_budget = int(budget_val.replace(',', '')) if budget_val else 300000
+except:
+    monthly_budget = 300000
+
 # --- SIDEBAR SETTINGS ---
 with st.sidebar:
     st.header("Budget Settings")
-    # This creates a box where you can type your monthly limit
-    monthly_budget = st.number_input(
-        "Set Monthly Budget (¥)", 
-        min_value=0, 
-        value=300000, # Default starting value
-        step=10000
-    )
-    st.info(f"Your current budget is ¥{monthly_budget:,}")
+    new_budget = st.number_input("Monthly Limit (¥)", value=monthly_budget, step=10000)
+    if st.button("Save New Budget"):
+        settings_ws.update_acell('B1', new_budget)
+        st.success("Budget Saved!")
+        st.rerun()
+
+st.title("¥ Yen Tracker Pro")
 
 # --- ADD EXPENSE FORM ---
-with st.form("expense_form"):
+with st.form("expense_form", clear_on_submit=True):
     st.subheader("Add New Expense")
-    category = st.selectbox("Category", [
-    "Food 🍱", 
-    "Transport 🚆", 
-    "Shopping 🛍️", 
-    "Sightseeing 🏯",
-    "Mortgage 🏠", 
-    "Car 🚗", 
-    "Water 💧", 
-    "Electricity ⚡", 
-    "Car Insurance 🛡️", 
-    "Motorcycle Insurance 🏍️", 
-    "Pet stuff 🐾", 
-    "Gifts 🎁"
-])
+    item = st.text_input("Item Name")
     amount = st.number_input("Amount (¥)", min_value=0, step=1, format="%d")
+    category = st.selectbox("Category", [
+        "Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
+        "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
+        "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"
+    ])
     date = st.date_input("Date")
     
     submit = st.form_submit_button("Save to Google Sheets")
     
-# Updated append_row to include the category
-if submit:
-    if item:
-        worksheet.append_row([str(date), item, category, amount])
-        st.success(f"Added ¥{amount} for {item}!")
-    else:
-            st.error("Please enter an item name.")
+    if submit:
+        if item and amount > 0:
+            # Append row to Sheet1: Date, Item, Category, Amount
+            expense_ws.append_row([str(date), item, category, amount])
+            st.success(f"Saved: {item} for ¥{amount:,}")
+            st.rerun()
+        else:
+            st.error("Please enter both an item and an amount.")
 
-# --- 1. ACCESS THE SETTINGS TAB ---
-# Connect to the 'Settings' worksheet
-settings_ws = sh.worksheet("Settings")
-
-# Get the current budget from cell B1
-current_budget_from_sheet = int(settings_ws.acell('B1').value or 300000)
-
-with st.sidebar:
-    st.header("Budget Settings")
-    new_budget = st.number_input("Monthly Budget (¥)", value=current_budget_from_sheet, step=10000)
-    
-    if st.button("Update Budget in Sheet"):
-        settings_ws.update_acell('B1', new_budget)
-        st.success("Budget Updated!")
-        st.rerun() # Refresh to use the new number
-
-monthly_budget = new_budget
-
-# --- 2. DATA PROCESSING (Expenses Tab) ---
-# Ensure we are looking at the first tab for expenses
-expense_ws = sh.get_worksheet(0) 
+# --- DATA PROCESSING & DASHBOARD ---
 data = expense_ws.get_all_records()
 
 if data:
     df = pd.DataFrame(data)
+    # Clean up any messy data
     df.columns = df.columns.str.strip()
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
     df = df.dropna(subset=['Date', 'Amount'])
 
     if not df.empty:
+        # Calculate Current Month Spending
         current_month = pd.Timestamp.now().to_period('M')
         df['MonthYear'] = df['Date'].dt.to_period('M')
         
         monthly_total = df[df['MonthYear'] == current_month]['Amount'].sum()
-        remaining = monthly_budget - monthly_total
+        remaining = new_budget - monthly_total
 
-        # --- DASHBOARD METRICS ---
+        # --- DISPLAY METRICS ---
         st.divider()
         m1, m2 = st.columns(2)
         m1.metric("Spent (This Month)", f"¥{int(monthly_total):,}")
-        m2.metric("Remaining", f"¥{int(remaining):,}", 
-                  delta=f"{(remaining/monthly_budget)*100:.1f}% left",
-                  delta_color="normal" if remaining > 0 else "inverse")
         
-        # Progress Bar
-        st.progress(min(max(monthly_total / monthly_budget, 0.0), 1.0))
+        # Calculate Delta and Color
+        remaining_pct = (remaining / new_budget) * 100 if new_budget > 0 else 0
+        m2.metric(
+            "Remaining", 
+            f"¥{int(remaining):,}", 
+            delta=f"{remaining_pct:.1f}% left",
+            delta_color="normal" if remaining > 0 else "inverse"
+        )
+        
+        # Progress Bar visual
+        st.progress(min(max(monthly_total / new_budget, 0.0), 1.0) if new_budget > 0 else 0.0)
+
+        # Show History
+        st.subheader("Recent Expenses")
+        st.dataframe(
+            df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(15), 
+            use_container_width=True,
+            hide_index=True
+        )
+else:
+    st.info("No data found. Start by adding an expense above!")
+
 
 
 
