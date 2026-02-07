@@ -8,7 +8,6 @@ st.set_page_config(
     layout="centered", # Better for narrow phone screens
     initial_sidebar_state="collapsed"
 )
-amount = st.number_input("Amount (¥)", min_value=0, step=1, format="%d")
 
 # 1. Setup Connection
 scope = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -26,17 +25,30 @@ st.title("Bond Finance Tracker")
 # --- ADD EXPENSE FORM ---
 with st.form("expense_form"):
     st.subheader("Add New Expense")
-    item = st.text_input("Item Name")
-    amount = st.number_input("Amount (¥)", min_value=0, step=1)
+    category = st.selectbox("Category", [
+    "Food 🍱", 
+    "Transport 🚆", 
+    "Shopping 🛍️", 
+    "Sightseeing 🏯",
+    "Mortgage 🏠", 
+    "Car 🚗", 
+    "Water 💧", 
+    "Electricity ⚡", 
+    "Car Insurance 🛡️", 
+    "Motorcycle Insurance 🏍️", 
+    "Pet stuff 🐾", 
+    "Gifts 🎁"
+])
+    amount = st.number_input("Amount (¥)", min_value=0, step=1, format="%d")
     date = st.date_input("Date")
     
     submit = st.form_submit_button("Save to Google Sheets")
     
-    if submit:
-        if item:
-            # Add the row to the bottom of the sheet
-            worksheet.append_row([str(date), item, amount])
-            st.success(f"Added ¥{amount} for {item}!")
+# Updated append_row to include the category
+if submit:
+    if item:
+        worksheet.append_row([str(date), item, category, amount])
+        st.success(f"Added ¥{amount} for {item}!")
         else:
             st.error("Please enter an item name.")
 
@@ -46,6 +58,7 @@ st.subheader("Recent Expenses")
 data = worksheet.get_all_records()
 df = pd.DataFrame(data)
 st.dataframe(df)
+
 
 
 
