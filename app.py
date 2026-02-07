@@ -29,115 +29,55 @@ except:
     monthly_budget = 300000
 # ... setup code ...
 
-# 1. Start with blank values
+## --- INITIALIZE VARIABLES ---
 suggested_item = ""
 suggested_amount = 0
 suggested_cat = "Food 🍱"
 
-# 2. The AI expander might change those values
+st.title("¥ Yen Tracker Pro")
+
+# --- AI SCANNER ---
 with st.expander("📸 Scan Receipt with AI"):
     uploaded_file = st.camera_input("Take a photo")
     if uploaded_file:
-        # ... AI logic happens here ...
-        # If AI works, it updates suggested_item to "Family Mart" etc.
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        img = Image.open(uploaded_file)
+        
+        with st.spinner("AI reading receipt..."):
+            prompt = "Analyze this receipt. Return ONLY JSON: {'item': 'name', 'amount': int, 'category': 'match'}"
+            response = model.generate_content([prompt, img])
+            try:
+                raw_text = response.text.strip().replace('```json', '').replace('```', '')
+                ai_data = json.loads(raw_text)
+                suggested_item = ai_data.get('item', "")
+                suggested_amount = ai_data.get('amount', 0)
+                suggested_cat = ai_data.get('category', "Food 🍱")
+            except:
+                st.error("AI parse error.")
 
-# 3. The Form now has something to look at (either "" or "Family Mart")
-        with st.form("expense_form"):
-            item = st.text_input("Item Name", value=suggested_item) # No more error!
-# --- SIDEBAR SETTINGS ---
-    with st.sidebar:
-        st.header("Budget Settings")
-    new_budget = st.number_input("Monthly Limit (¥)", value=monthly_budget, step=10000)
-    if st.button("Save New Budget"):
-        settings_ws.update_acell('B1', new_budget)
-        st.success("Budget Saved!")
-        st.rerun()
-
-st.title("Bond Finances")
-
-# --- ADD EXPENSE FORM ---
+# --- ADD EXPENSE FORM (Aligned to the left wall!) ---
 with st.form("expense_form", clear_on_submit=True):
     st.subheader("Add New Expense")
-    
-    # 1. Inputs (Pre-filled by AI if available, otherwise empty)
     item = st.text_input("Item Name", value=suggested_item)
-    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1)
+    amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount))
     
     categories = ["Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
                   "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
                   "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"]
     
-    try:
-        default_index = categories.index(suggested_cat)
-    except:
-        default_index = 0
-        
-    category = st.selectbox("Category", categories, index=default_index)
-    date = st.date_input("Date")
+    # Use the 'key' to avoid the duplicate ID error we saw earlier
+    idx = categories.index(suggested_cat) if suggested_cat in categories else 0
+    category = st.selectbox("Category", categories, index=idx, key="main_cat_select")
     
-    # 2. THE BUTTON (Ensure this is NOT indented inside an 'if' block)
     submit = st.form_submit_button("Save to Google Sheets")
     
-    # 3. Processing the click
     if submit:
         if item and amount > 0:
-            expense_ws.append_row([str(date), item, category, amount])
-            st.success(f"Saved: {item}")
-            st.rerun()
-        else:
-            st.error("Please provide both a name and an amount.")
-    
-    # Match the category from the AI
-    try:
-        default_index = categories.index(suggested_cat)
-    except:
-        default_index = 0
-        
-    # Change this line in your Form section:
-category = st.selectbox("Category", categories, index=default_index, key="form_category")
-date = st.date_input("Date")
-    
-submit = st.form_submit_button("Save to Google Sheets")
-    
-    if submit:
-        if item and amount > 0:
-            expense_ws.append_row([str(date), item, category, amount])
-            st.success(f"Saved: {item}")
+            expense_ws.append_row([str(st.date_input("Date")), item, category, amount])
+            st.success("Saved!")
             st.rerun()
 
-# --- DATA PROCESSING & DASHBOARD ---
-data = expense_ws.get_all_records()
-if data:
-    df = pd.DataFrame(data)
-    df.columns = df.columns.str.strip()
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
-    df = df.dropna(subset=['Date', 'Amount'])
-
-    if not df.empty:
-        current_month = pd.Timestamp.now().to_period('M')
-        df['MonthYear'] = df['Date'].dt.to_period('M')
-        monthly_total = df[df['MonthYear'] == current_month]['Amount'].sum()
-        remaining = monthly_budget - monthly_total
-
-        st.divider()
-        m1, m2 = st.columns(2)
-        m1.metric("Spent This Month", f"¥{int(monthly_total):,}")
-        m2.metric("Remaining", f"¥{int(remaining):,}", 
-                  delta=f"{(remaining/monthly_budget)*100:.1f}% left",
-                  delta_color="normal" if remaining > 0 else "inverse")
-        
-        st.progress(min(max(monthly_total / monthly_budget, 0.0), 1.0))
-        st.dataframe(df[['Date', 'Item', 'Category', 'Amount']].iloc[::-1].head(10), hide_index=True)
-
-# --- SIDEBAR FOR SETTINGS ---
-with st.sidebar:
-    st.header("Settings")
-    new_budget = st.number_input("Edit Monthly Budget", value=monthly_budget, step=10000)
-    if st.button("Update Budget"):
-        settings_ws.update_acell('B1', new_budget)
-        st.success("Budget updated in Sheet!")
-        st.rerun()
 
 
 
