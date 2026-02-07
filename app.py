@@ -13,7 +13,7 @@ creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
 # 3. Open the Sheet (Make sure your ID is correct below)
-SHEET_ID = "YOUR_LONG_ID_HERE" 
+SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" 
 sh = client.open_by_key(SHEET_ID)
 expense_ws = sh.get_worksheet(0) # Targets the first tab (Sheet1)
 settings_ws = sh.worksheet("Settings") # Targets the Settings tab
@@ -104,6 +104,7 @@ if data:
         )
 else:
     st.info("No data found. Start by adding an expense above!")
+
 
 
 
