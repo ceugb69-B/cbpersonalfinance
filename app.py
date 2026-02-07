@@ -10,7 +10,7 @@ creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
 # 2. Open the Sheet (Use your Sheet ID here)
-SHEET_ID = "YOUR_LONG_ID_HERE"
+SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU"
 sh = client.open_by_key(SHEET_ID)
 worksheet = sh.get_worksheet(0)
 
@@ -39,6 +39,7 @@ st.subheader("Recent Expenses")
 data = worksheet.get_all_records()
 df = pd.DataFrame(data)
 st.dataframe(df)
+
 
 
 
