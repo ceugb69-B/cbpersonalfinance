@@ -43,7 +43,7 @@ with st.expander("📸 Scan Receipt with AI"):
 
 # 3. The Form now has something to look at (either "" or "Family Mart")
         with st.form("expense_form"):
-        item = st.text_input("Item Name", value=suggested_item) # No more error!
+            item = st.text_input("Item Name", value=suggested_item) # No more error!
 # --- SIDEBAR SETTINGS ---
     with st.sidebar:
     st.header("Budget Settings")
@@ -137,6 +137,7 @@ with st.sidebar:
         settings_ws.update_acell('B1', new_budget)
         st.success("Budget updated in Sheet!")
         st.rerun()
+
 
 
 
