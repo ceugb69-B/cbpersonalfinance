@@ -21,6 +21,17 @@ sh = client.open_by_key(SHEET_ID)
 worksheet = sh.get_worksheet(0)
 
 st.title("Bond Finance Tracker")
+# --- SIDEBAR SETTINGS ---
+with st.sidebar:
+    st.header("Budget Settings")
+    # This creates a box where you can type your monthly limit
+    monthly_budget = st.number_input(
+        "Set Monthly Budget (¥)", 
+        min_value=0, 
+        value=300000, # Default starting value
+        step=10000
+    )
+    st.info(f"Your current budget is ¥{monthly_budget:,}")
 
 # --- ADD EXPENSE FORM ---
 with st.form("expense_form"):
@@ -87,6 +98,7 @@ if data:
         st.warning("Found the sheet, but the rows appear to be empty or formatted incorrectly.")
 else:
     st.info("Your Google Sheet is totally empty. Add your first expense to get started!")
+
 
 
 
