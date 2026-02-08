@@ -40,14 +40,6 @@ st.title("Bond Finances")
 with st.expander("📸 Scan Receipt with AI"):
     uploaded_file = st.camera_input("Take a photo")
     if uploaded_file:
-        try:
-            genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-# We use the 'gemini-pro-vision' name as a fallback 
-# OR the strictly formatted string below:
-with st.expander("📸 Scan Receipt with AI"):
-    uploaded_file = st.camera_input("Take a photo")
-    if uploaded_file:
         # 1. Initialize variables to prevent "NameErrors" later
         ai_success = False
         
@@ -224,6 +216,7 @@ if st.button("Test AI Connection"):
         st.write(response.text)
     except Exception as e:
         st.error(f"Test Failed: {e}")
+
 
 
 
