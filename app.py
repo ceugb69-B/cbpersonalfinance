@@ -42,21 +42,34 @@ with st.expander("📸 Scan Receipt with AI"):
     if uploaded_file:
         try:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            model = genai.GenerativeModel(model_name='gemini-1.5-flash')
-            img = Image.open(uploaded_file)
+            # Use the most stable configuration for Flash
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
-            with st.spinner("AI reading receipt..."):
-                prompt = """Analyze receipt. Return ONLY JSON: {"item": "store", "amount": int, "category": "match"}
-                Categories: Food 🍱, Transport 🚆, Shopping 🛍️, Sightseeing 🏯, Mortgage 🏠, Car 🚗, Water 💧, Electricity ⚡, Car Insurance 🛡️, Motorcycle Insurance 🏍️, Pet stuff 🐾, Gifts 🎁"""
+            # SURGERY: Open and resize the image to reduce data load
+            img = Image.open(uploaded_file)
+            max_size = (800, 800)
+            img.thumbnail(max_size) # Shrinks image if it's huge
+            
+            with st.spinner("AI analyzing..."):
+                # Simplified prompt to reduce processing time
+                prompt = "Return JSON only: {'item': str, 'amount': int, 'category': str}. Categories: Food 🍱, Transport 🚆, Shopping 🛍️, Sightseeing 🏯, Mortgage 🏠, Car 🚗, Water 💧, Electricity ⚡, Car Insurance 🛡️, Motorcycle Insurance 🏍️, Pet stuff 🐾, Gifts 🎁"
+                
+                # The actual API call
                 response = model.generate_content([prompt, img])
-                raw_text = response.text.strip().replace('```json', '').replace('```', '')
-                ai_data = json.loads(raw_text)
+                
+                # Clean and parse
+                clean_json = response.text.replace('```json', '').replace('```', '').strip()
+                ai_data = json.loads(clean_json)
+                
                 suggested_item = ai_data.get('item', "")
                 suggested_amount = ai_data.get('amount', 0)
                 suggested_cat = ai_data.get('category', "Food 🍱")
-                st.success(f"AI Detected: {suggested_item}")
+                
+                st.success(f"Found: {suggested_item} (¥{suggested_amount})")
         except Exception as e:
-            st.info("AI Scanner is ready but waiting for a clear receipt photo.")
+            st.warning("Scanner connection busy. Please try manual entry or take the photo again.")
+            # This prints the actual error to your Streamlit logs so you can see it later
+            print(f"DEBUG AI ERROR: {e}")
 
 # --- SECTION 2: ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
@@ -164,6 +177,7 @@ with st.sidebar:
         settings_ws.update_acell('B1', new_budget)
         st.success("Salary updated!")
         st.rerun()
+
 
 
 
