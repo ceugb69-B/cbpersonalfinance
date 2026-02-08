@@ -37,28 +37,20 @@ except:
 st.title("Bond Finances")
 
 # --- SECTION 1: AI SCANNER ---
+# --- 1. AI SCANNER (Self-Contained) ---
 with st.expander("📸 Scan Receipt with AI"):
     uploaded_file = st.camera_input("Take a photo")
     if uploaded_file:
-        # 1. Initialize variables to prevent "NameErrors" later
         ai_success = False
-        
-        try:
+        try: # THIS TRY...
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-            
-            # Use a robust model name string
             model = genai.GenerativeModel('gemini-1.5-flash')
-            
             img = Image.open(uploaded_file)
-            # Resize for faster upload
             img.thumbnail((800, 800))
             
-            with st.spinner("AI analyzing..."):
-                prompt = "Return ONLY JSON: {'item': str, 'amount': int, 'category': str}. Categories: Food 🍱, Transport 🚆, Shopping 🛍️, Sightseeing 🏯, Mortgage 🏠, Car 🚗, Water 💧, Electricity ⚡, Car Insurance 🛡️, Motorcycle Insurance 🏍️, Pet stuff 🐾, Gifts 🎁"
-                
+            with st.spinner("AI reading..."):
+                prompt = "Return JSON: {'item': str, 'amount': int, 'category': str}"
                 response = model.generate_content([prompt, img])
-                
-                # Clean and parse JSON
                 raw_json = response.text.replace('```json', '').replace('```', '').strip()
                 ai_data = json.loads(raw_json)
                 
@@ -66,41 +58,14 @@ with st.expander("📸 Scan Receipt with AI"):
                 suggested_amount = ai_data.get('amount', 0)
                 suggested_cat = ai_data.get('category', "Food 🍱")
                 ai_success = True
-                
-        except Exception as e:
-            # This is the "except" block Python was looking for!
-            st.warning("AI Scanner is having trouble connecting. Using manual entry for now.")
-            # This helps you debug in the Streamlit logs
+                st.success(f"AI Found: {suggested_item}")
+        except Exception as e: # ...MUST BE CLOSED BY THIS EXCEPT IMMEDIATELY
+            st.warning("Scanner connection busy.")
             print(f"AI Error: {e}")
 
-        if ai_success:
-            st.success(f"AI Found: {suggested_item} (¥{suggested_amount})")
-            
-            # SURGERY: Open and resize the image to reduce data load
-            img = Image.open(uploaded_file)
-            max_size = (800, 800)
-            img.thumbnail(max_size) # Shrinks image if it's huge
-            
-            with st.spinner("AI analyzing..."):
-                # Simplified prompt to reduce processing time
-                prompt = "Return JSON only: {'item': str, 'amount': int, 'category': str}. Categories: Food 🍱, Transport 🚆, Shopping 🛍️, Sightseeing 🏯, Mortgage 🏠, Car 🚗, Water 💧, Electricity ⚡, Car Insurance 🛡️, Motorcycle Insurance 🏍️, Pet stuff 🐾, Gifts 🎁"
-                
-                # The actual API call
-                response = model.generate_content([prompt, img])
-                
-                # Clean and parse
-                clean_json = response.text.replace('```json', '').replace('```', '').strip()
-                ai_data = json.loads(clean_json)
-                
-                suggested_item = ai_data.get('item', "")
-                suggested_amount = ai_data.get('amount', 0)
-                suggested_cat = ai_data.get('category', "Food 🍱")
-                
-                st.success(f"Found: {suggested_item} (¥{suggested_amount})")
-        except Exception as e:
-            st.warning("Scanner connection busy. Please try manual entry or take the photo again.")
-            # This prints the actual error to your Streamlit logs so you can see it later
-            print(f"DEBUG AI ERROR: {e}")
+# --- 2. THE FORM (Starts AFTER the AI block is totally finished) ---
+with st.form("expense_form", clear_on_submit=True):
+    # ... your form code here ...
 
 # --- SECTION 2: ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
@@ -216,6 +181,7 @@ if st.button("Test AI Connection"):
         st.write(response.text)
     except Exception as e:
         st.error(f"Test Failed: {e}")
+
 
 
 
