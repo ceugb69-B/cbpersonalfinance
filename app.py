@@ -85,7 +85,7 @@ with st.form("expense_form", clear_on_submit=True):
     if submit:
         if item and amount > 0:
             # SAVING ORDER: Date, Item, Amount, Category, Description
-            expense_ws.append_row([str(date), item, amount, category, description])
+            expense_ws.append_row([date.strftime("%Y-%m-%d"), item, amount, category, description])
             st.success(f"Saved: {item}")
             st.rerun()
 
@@ -125,6 +125,7 @@ if raw_data:
         st.error("Column 'Amount' not found. Please check your Google Sheet headers.")
 else:
     st.info("No data found. Add your first expense above!")
+
 
 
 
