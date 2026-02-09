@@ -174,7 +174,7 @@ from datetime import datetime
         m3.metric("Daily Allowance", "¥0", delta="- Over Budget", delta_color="inverse")
     
     st.progress(percent_spent)
-    # --------------------------
+
     # Charts
     st.write("### Spending Analysis")
     chart_col1, chart_col2 = st.columns(2)
@@ -200,6 +200,7 @@ from datetime import datetime
         st.dataframe(history_view.head(15), hide_index=True, use_container_width=True)
 else:
     st.info("No data found. Ensure your Sheet has headers: Date, Item, Amount, Category, Description")
+
 
 
 
