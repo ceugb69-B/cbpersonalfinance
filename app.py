@@ -155,10 +155,11 @@ if not df.empty:
     st.progress(percent_spent)
 import calendar
 from datetime import datetime
-    now = datetime.now()
+
+now = datetime.now()
     # Get last day of current month (e.g., 28 for Feb 2026)
-    last_day = calendar.monthrange(now.year, now.month)[1]
-    days_left = last_day - now.day + 1
+last_day = calendar.monthrange(now.year, now.month)[1]
+days_left = last_day - now.day + 1
     
     st.divider()
     m1, m2, m3 = st.columns(3) # Changed to 3 columns
@@ -199,6 +200,7 @@ from datetime import datetime
         st.dataframe(history_view.head(15), hide_index=True, use_container_width=True)
 else:
     st.info("No data found. Ensure your Sheet has headers: Date, Item, Amount, Category, Description")
+
 
 
 
