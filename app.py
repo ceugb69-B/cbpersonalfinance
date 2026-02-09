@@ -122,7 +122,7 @@ with st.sidebar:
         st.success("Salary updated!")
         st.rerun()            
             # --- HISTORY TABLE ---
-            with st.expander("View Recent History"):
+    with st.expander("View Recent History"):
                 # Dynamically select columns that actually exist to avoid KeyErrors
                 cols_to_show = [c for c in ['Date', 'Item', 'Amount', 'Category', 'Description'] if c in df.columns]
                 history_view = df[cols_to_show].iloc[::-1].copy()
@@ -132,6 +132,7 @@ with st.sidebar:
         st.error("Column 'Amount' not found. Please check your Google Sheet headers.")
 else:
     st.info("No data found. Add your first expense above!")
+
 
 
 
