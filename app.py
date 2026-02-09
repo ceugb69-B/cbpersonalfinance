@@ -169,7 +169,7 @@ m2.metric("Remaining Salary", f"¥{int(remaining):,}")
 if remaining > 0:
         daily_allowance = remaining / days_left
         m3.metric("Daily Allowance", f"¥{int(daily_allowance):,}")
-    else:
+else:
         m3.metric("Daily Allowance", "¥0", delta="Over Budget", delta_color="inverse")
     
     st.progress(percent_spent)
@@ -201,6 +201,7 @@ if remaining > 0:
         st.dataframe(history_view.head(15), hide_index=True, use_container_width=True)
 else:
     st.info("No data found. Ensure your Sheet has headers: Date, Item, Amount, Category, Description")
+
 
 
 
