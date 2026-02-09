@@ -17,32 +17,88 @@ creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
 # 3. Open Sheets (REPLACE SHEET_ID WITH YOURS)
-SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" 
+SHEET_ID = "YOUR_SHEET_ID_HERE" 
 sh = client.open_by_key(SHEET_ID)
 expense_ws = sh.get_worksheet(0)
 settings_ws = sh.worksheet("Settings")
 
-# 4. Initialize AI Variables
-suggested_item = ""
-suggested_amount = 0
-suggested_cat = "Food 🍱"
-
-# 5. Get Salary from Settings Tab
+# 4. Initialize Variables & Budget
 try:
     budget_val = settings_ws.acell('B1').value
     monthly_budget = int(str(budget_val).replace(',', '')) if budget_val else 300000
 except:
     monthly_budget = 300000
 
-st.title("Bond Finances")
+# --- DATA FETCHING (Done early for filters) ---
+raw_data = expense_ws.get_all_records()
+df = pd.DataFrame(raw_data)
+
+if not df.empty:
+    df.columns = [str(c).strip() for c in df.columns]
+    # Use 'mixed' to handle the apostrophe-text vs date objects
+    df['Date'] = pd.to_datetime(df['Date'], format='mixed', errors='coerce')
+    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
+    df = df.dropna(subset=['Date'])
+    df = df.sort_values('Date')
+
+# --- SIDEBAR (Filters & Maintenance) ---
+with st.sidebar:
+    st.header("Settings & Filters")
+    
+    # Salary Update
+    new_budget = st.number_input("Monthly Salary (¥)", value=int(monthly_budget), step=10000)
+    if st.button("Update Salary"):
+        settings_ws.update_acell('B1', new_budget)
+        st.success("Salary updated!")
+        st.rerun()
+
+    st.divider()
+
+    # Advanced Filters
+    if not df.empty:
+        st.subheader("Chart Filters")
+        min_date = df['Date'].min().date()
+        max_date = df['Date'].max().date()
+        selected_range = st.date_input("Select Date Range", value=(min_date, max_date))
+        
+        all_cats = sorted(df['Category'].unique().tolist())
+        selected_cats = st.multiselect("Filter by Category", options=all_cats, default=all_cats)
+        
+        # Apply Filters to the main DF used by charts
+        if len(selected_range) == 2:
+            start, end = selected_range
+            df = df[(df['Date'].dt.date >= start) & (df['Date'].dt.date <= end)]
+        df = df[df['Category'].isin(selected_cats)]
+    
+    st.divider()
+
+    # Maintenance Button (The Apostrophe Killer)
+    if st.button("🧹 Clean & Standardize Sheet"):
+        with st.spinner("Standardizing dates and removing apostrophes..."):
+            all_data = expense_ws.get_all_records()
+            if all_data:
+                clean_df = pd.DataFrame(all_data)
+                clean_df['Date'] = pd.to_datetime(clean_df['Date'], format='mixed', errors='coerce')
+                clean_df = clean_df.dropna(subset=['Date'])
+                clean_df['Date'] = clean_df['Date'].dt.strftime('%Y-%m-%d')
+                clean_df['Amount'] = pd.to_numeric(clean_df['Amount'], errors='coerce').fillna(0).astype(int)
+                
+                updated_rows = [clean_df.columns.values.tolist()] + clean_df.values.tolist()
+                expense_ws.clear()
+                # value_input_option='USER_ENTERED' removes the ' marks in the formula bar
+                expense_ws.update(range_name='A1', values=updated_rows, value_input_option='USER_ENTERED')
+                st.success("Sheet cleaned!")
+                st.rerun()
+
+st.title("Yen Tracker")
 
 # --- SECTION 1: AI SCANNER ---
-# --- 1. AI SCANNER (Self-Contained) ---
+suggested_item, suggested_amount, suggested_cat = "", 0, "Food 🍱"
+
 with st.expander("📸 Scan Receipt with AI"):
     uploaded_file = st.camera_input("Take a photo")
     if uploaded_file:
-        ai_success = False
-        try: # THIS TRY...
+        try:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
             model = genai.GenerativeModel('gemini-1.5-flash')
             img = Image.open(uploaded_file)
@@ -53,15 +109,12 @@ with st.expander("📸 Scan Receipt with AI"):
                 response = model.generate_content([prompt, img])
                 raw_json = response.text.replace('```json', '').replace('```', '').strip()
                 ai_data = json.loads(raw_json)
-                
                 suggested_item = ai_data.get('item', "")
                 suggested_amount = ai_data.get('amount', 0)
                 suggested_cat = ai_data.get('category', "Food 🍱")
-                ai_success = True
                 st.success(f"AI Found: {suggested_item}")
-        except Exception as e: # ...MUST BE CLOSED BY THIS EXCEPT IMMEDIATELY
+        except Exception as e:
             st.warning("Scanner connection busy.")
-            print(f"AI Error: {e}")
 
 # --- SECTION 2: ADD EXPENSE FORM ---
 with st.form("expense_form", clear_on_submit=True):
@@ -70,67 +123,63 @@ with st.form("expense_form", clear_on_submit=True):
     with col_a:
         item = st.text_input("Item Name", value=suggested_item)
         amount = st.number_input("Amount (¥)", min_value=0, value=int(suggested_amount), step=1)
-        description = st.text_input("Description (Optional)", placeholder="e.g. Weekly groceries")
+        description = st.text_input("Description (Optional)")
     with col_b:
-        categories = ["Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯",
-                      "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", 
-                      "Car Insurance 🛡️", "Motorcycle Insurance 🏍️", "Pet stuff 🐾", "Gifts 🎁"]
-        # Match AI category if found
+        categories = ["Food 🍱", "Transport 🚆", "Shopping 🛍️", "Sightseeing 🏯", "Mortgage 🏠", "Car 🚗", "Water 💧", "Electricity ⚡", "Pet stuff 🐾", "Gifts 🎁"]
         idx = categories.index(suggested_cat) if suggested_cat in categories else 0
         category = st.selectbox("Category", categories, index=idx)
         date = st.date_input("Date")
     
-    submit = st.form_submit_button("Save to Google Sheets")
-    
-    if submit:
+    if st.form_submit_button("Save to Google Sheets"):
         if item and amount > 0:
-            # SAVING ORDER: Date, Item, Amount, Category, Description
+            # Format date as string to prevent Sheets formatting issues
             expense_ws.append_row([date.strftime("%Y-%m-%d"), item, amount, category, description])
             st.success(f"Saved: {item}")
             st.rerun()
 
 # --- SECTION 3: DASHBOARD & GRAPHS ---
-# Fetch all data from Sheet
-raw_data = expense_ws.get_all_records()
-
-if raw_data:
-    df = pd.DataFrame(raw_data)
+if not df.empty:
+    # Metrics
+    current_month = pd.Timestamp.now().to_period('M')
+    df['MonthYear'] = df['Date'].dt.to_period('M')
+    curr_month_df = df[df['MonthYear'] == current_month]
     
-    # 1. Clean up column names (removes hidden spaces/case sensitivity)
-    df.columns = [str(c).strip() for c in df.columns]
-    
-    # 2. Safety Check: Ensure 'Amount' exists before processing
-    if 'Amount' in df.columns:
-        # Force correct data types
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce', infer_datetime_format=True)
-        df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
-        
-        # Drop rows that are missing core data (like empty rows at the bottom)
-        df = df.dropna(subset=['Date', 'Amount'])
+    monthly_total = curr_month_df['Amount'].sum()
+    remaining = monthly_budget - monthly_total
+    percent_spent = min(max(monthly_total / monthly_budget, 0.0), 1.0)
 
-        if not df.empty:
-            # Sort for proper chronological graphing
-            df = df.sort_values('Date')
-            
-            # ... [The rest of your chart logic remains the same] ...
-# --- SIDEBAR ---
-with st.sidebar:
-    st.header("Settings")
-    new_budget = st.number_input("Monthly Salary (¥)", value=int(monthly_budget), step=10000)
-    if st.button("Update Salary"):
-        settings_ws.update_acell('B1', new_budget)
-        st.success("Salary updated!")
-        st.rerun()            
-            # --- HISTORY TABLE ---
+    st.divider()
+    m1, m2 = st.columns(2)
+    m1.metric("Spent This Month", f"¥{int(monthly_total):,}")
+    m2.metric("Remaining Salary", f"¥{int(remaining):,}", delta=f"{(remaining/monthly_budget)*100:.1f}% budget used", delta_color="inverse")
+    st.progress(percent_spent)
+
+    # Charts
+    st.write("### Spending Analysis")
+    chart_col1, chart_col2 = st.columns(2)
+
+    with chart_col1:
+        trend_df = df.groupby(df['Date'].dt.strftime('%Y-%m'))['Amount'].sum().reset_index()
+        trend_df.columns = ['Month', 'Total Amount']
+        fig_bar = px.bar(trend_df, x='Month', y='Total Amount', title="Monthly Spending History", color_discrete_sequence=['#ff4b4b'])
+        fig_bar.add_hline(y=monthly_budget, line_dash="dot", line_color="green", annotation_text="Budget Limit")
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    with chart_col2:
+        if not curr_month_df.empty:
+            cat_df = curr_month_df.groupby('Category')['Amount'].sum().reset_index()
+            fig_pie = px.pie(cat_df, values='Amount', names='Category', title=f"Category Breakdown ({current_month})", hole=0.4)
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("No data for the current month matches the filters.")
+
     with st.expander("View Recent History"):
-                # Dynamically select columns that actually exist to avoid KeyErrors
-                cols_to_show = [c for c in ['Date', 'Item', 'Amount', 'Category', 'Description'] if c in df.columns]
-                history_view = df[cols_to_show].iloc[::-1].copy()
-                history_view['Date'] = history_view['Date'].dt.strftime('%Y-%m-%d')
-                st.dataframe(history_view.head(15), hide_index=True, use_container_width=True)
-
+        history_view = df[['Date', 'Item', 'Amount', 'Category', 'Description']].iloc[::-1].copy()
+        history_view['Date'] = history_view['Date'].dt.strftime('%Y-%m-%d')
+        st.dataframe(history_view.head(15), hide_index=True, use_container_width=True)
 else:
-    st.info("No data found. Add your first expense above!")
+    st.info("No data found. Ensure your Sheet has headers: Date, Item, Amount, Category, Description")
+
 
 
 
