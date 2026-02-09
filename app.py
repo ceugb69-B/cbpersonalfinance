@@ -153,7 +153,28 @@ if not df.empty:
     m1.metric("Spent This Month", f"¥{int(monthly_total):,}")
     m2.metric("Remaining Salary", f"¥{int(remaining):,}", delta=f"{(remaining/monthly_budget)*100:.1f}% budget used", delta_color="inverse")
     st.progress(percent_spent)
-
+import calendar
+    from datetime import datetime
+    
+    now = datetime.now()
+    # Get last day of current month (e.g., 28 for Feb 2026)
+    last_day = calendar.monthrange(now.year, now.month)[1]
+    days_left = last_day - now.day + 1
+    
+    st.divider()
+    m1, m2, m3 = st.columns(3) # Changed to 3 columns
+    m1.metric("Spent This Month", f"¥{int(monthly_total):,}")
+    m2.metric("Remaining Salary", f"¥{int(remaining):,}")
+    
+    if remaining > 0:
+        daily_allowance = remaining / days_left
+        m3.metric("Daily Allowance", f"¥{int(daily_allowance):,}")
+        st.write(f"💡 *You have **{days_left}** days left this month.*")
+    else:
+        m3.metric("Daily Allowance", "¥0", delta="- Over Budget", delta_color="inverse")
+    
+    st.progress(percent_spent)
+    # --------------------------
     # Charts
     st.write("### Spending Analysis")
     chart_col1, chart_col2 = st.columns(2)
@@ -179,6 +200,7 @@ if not df.empty:
         st.dataframe(history_view.head(15), hide_index=True, use_container_width=True)
 else:
     st.info("No data found. Ensure your Sheet has headers: Date, Item, Amount, Category, Description")
+
 
 
 
