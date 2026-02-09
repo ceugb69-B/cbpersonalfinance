@@ -17,7 +17,7 @@ creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
 
 # 3. Open Sheets (REPLACE SHEET_ID WITH YOURS)
-SHEET_ID = "YOUR_SHEET_ID_HERE" 
+SHEET_ID = "1L_0iJOrN-nMxjX5zjNm2yUnUyck9RlUqeg2rnXvpAlU" 
 sh = client.open_by_key(SHEET_ID)
 expense_ws = sh.get_worksheet(0)
 settings_ws = sh.worksheet("Settings")
@@ -90,7 +90,7 @@ with st.sidebar:
                 st.success("Sheet cleaned!")
                 st.rerun()
 
-st.title("Yen Tracker")
+st.title("Bond Finances")
 
 # --- SECTION 1: AI SCANNER ---
 suggested_item, suggested_amount, suggested_cat = "", 0, "Food 🍱"
@@ -179,6 +179,7 @@ if not df.empty:
         st.dataframe(history_view.head(15), hide_index=True, use_container_width=True)
 else:
     st.info("No data found. Ensure your Sheet has headers: Date, Item, Amount, Category, Description")
+
 
 
 
