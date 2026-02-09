@@ -198,6 +198,23 @@ if not df.empty:
 else:
     st.info("No data found. Ensure your Sheet has headers: Date, Item, Amount, Category, Description")
 
+# --- SECTION 4: EXPORT ---
+st.divider()
+if not df.empty:
+    # 1. Convert the current filtered dataframe to CSV
+    # index=False prevents the row numbers from being saved as a column
+    csv_data = df.to_csv(index=False).encode('utf-8')
+    
+    # 2. Create the download button
+    st.download_button(
+        label="📥 Download Filtered Data as CSV",
+        data=csv_data,
+        file_name=f"yen_tracker_export_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+    )
+    st.caption("Note: This CSV file can be opened directly in Excel or Google Sheets.")
+
+
 
 
 
